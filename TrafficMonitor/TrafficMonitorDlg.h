@@ -59,7 +59,7 @@ protected:
 
     vector<NetWorkConection> m_connections; //保存获取到的要显示到“选择网卡”菜单项中的所有网络连接
     MIB_IFTABLE* m_pIfTable;
-    DWORD m_dwSize{};	//m_pIfTable的大小
+    DWORD m_dwSize{};   //m_pIfTable的大小
     int m_connection_selected{ 0 }; //要显示流量的连接的序号
     unsigned __int64 m_in_bytes{};        //当前已接收的字节数
     unsigned __int64 m_out_bytes{};   //当前已发送的字节数
@@ -160,6 +160,9 @@ protected:
     void IniConnectionMenu(CMenu* pMenu);   //初始化“选择网络连接”菜单
     void IniTaskBarConnectionMenu();        //初始化任务栏窗口的“选择网络连接”菜单
     void SetConnectionMenuState(CMenu* pMenu);      //设置“选择网络连接”菜单中选中的项目
+    void IniDefaultAdapterMenu(CMenu* pMenu);   //初始化“选择默认网络适配器”菜单
+    void IniTaskBarDefaultAdapterMenu();        //初始化任务栏窗口的“选择默认网络适配器”菜单
+    void SetDefaultAdapterMenuState(CMenu* pMenu);      //设置“选择默认网络适配器”菜单中选中的项目
 
     void CloseTaskBarWnd(); //关闭任务栏窗口
     void OpenTaskBarWnd();  //打开任务栏窗口

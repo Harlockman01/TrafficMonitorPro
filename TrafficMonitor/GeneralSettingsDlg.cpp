@@ -7,6 +7,7 @@
 #include "GeneralSettingsDlg.h"
 #include "PluginManagerDlg.h"
 #include "SelectConnectionsDlg.h"
+#include "AdapterCommon.h"
 
 
 // CGeneralSettingsDlg dialog
@@ -57,6 +58,7 @@ void CGeneralSettingsDlg::SetControlMouseWheelEnable(bool enable)
     m_mbd_temp_tip_edit.SetMouseWheelEnable(enable);
     m_hard_disk_combo.SetMouseWheelEnable(enable);
     m_select_cpu_combo.SetMouseWheelEnable(enable);
+    m_default_adapter_combo.SetMouseWheelEnable(enable);
 }
 
 void CGeneralSettingsDlg::OnSettingsApplied()
@@ -119,6 +121,11 @@ bool CGeneralSettingsDlg::InitializeControls()
 
     RepositionTextBasedControls({
         { CtrlTextInfo::L4, IDC_SELECT_CONNECTIONS_BUTTON, CtrlTextInfo::W32 }
+    });
+    //调整“默认网络适配器”这一行控件的水平位置
+    RepositionTextBasedControls({
+        { CtrlTextInfo::L1, IDC_DEFAULT_ADAPTER_STATIC },
+        { CtrlTextInfo::C0, IDC_DEFAULT_ADAPTER_COMBO }
     });
     RepositionTextBasedControls({
         { CtrlTextInfo::L4, IDC_MONITOR_INTERVAL_STATIC },
@@ -193,6 +200,7 @@ void CGeneralSettingsDlg::DoDataExchange(CDataExchange* pDX)
     DDX_Control(pDX, IDC_MBD_TEMP_TIP_EDIT, m_mbd_temp_tip_edit);
     DDX_Control(pDX, IDC_SELECT_HARD_DISK_COMBO, m_hard_disk_combo);
     DDX_Control(pDX, IDC_SELECT_CPU_COMBO, m_select_cpu_combo);
+    DDX_Control(pDX, IDC_DEFAULT_ADAPTER_COMBO, m_default_adapter_combo);
     DDX_Control(pDX, IDC_PLUGIN_MANAGE_BUTTON, m_plugin_manager_btn);
     DDX_Control(pDX, IDC_SELECT_CONNECTIONS_BUTTON, m_select_connection_btn);
 }
@@ -242,6 +250,7 @@ BEGIN_MESSAGE_MAP(CGeneralSettingsDlg, CTabDlg)
     ON_BN_CLICKED(IDC_HDD_CHECK, &CGeneralSettingsDlg::OnBnClickedHddCheck)
     ON_BN_CLICKED(IDC_MBD_CHECK, &CGeneralSettingsDlg::OnBnClickedMbdCheck)
     ON_CBN_SELCHANGE(IDC_SELECT_CPU_COMBO, &CGeneralSettingsDlg::OnCbnSelchangeSelectCpuCombo)
+    ON_CBN_SELCHANGE(IDC_DEFAULT_ADAPTER_COMBO, &CGeneralSettingsDlg::OnCbnSelchangeDefaultAdapterCombo)
     ON_BN_CLICKED(IDC_PLUGIN_MANAGE_BUTTON, &CGeneralSettingsDlg::OnBnClickedPluginManageButton)
     ON_BN_CLICKED(IDC_SHOW_NOTIFY_ICON_CHECK, &CGeneralSettingsDlg::OnBnClickedShowNotifyIconCheck)
     ON_BN_CLICKED(IDC_SELECT_CONNECTIONS_BUTTON, &CGeneralSettingsDlg::OnBnClickedSelectConnectionsButton)
@@ -425,6 +434,21 @@ BOOL CGeneralSettingsDlg::OnInitDialog()
     }
 #endif
 
+    //初始化“默认网络适配器”下拉列表
+    //第一项是“自动（Windows默认）”，后面是当前所有可用的网络连接
+    m_default_adapter_combo.AddString(CCommon::LoadText(IDS_DEFAULT_ADAPTER_AUTO));
+    std::vector<NetWorkConection> adapters;
+    CAdapterCommon::GetAdapterInfo(adapters);
+    int default_adapter_sel{ 0 };       //默认选中“自动”
+    for (size_t i = 0; i < adapters.size(); i++)
+    {
+        std::wstring adapter_name = CCommon::StrToUnicode(adapters[i].description_2.c_str());
+        m_default_adapter_combo.AddString(adapter_name.c_str());
+        if (m_data.default_adapter == adapter_name)
+            default_adapter_sel = static_cast<int>(i) + 1;      //+1是因为第一项是“自动”
+    }
+    m_default_adapter_combo.SetCurSel(default_adapter_sel);
+
     //不含温度监控的版本，禁用温度相关的控件
 #ifdef WITHOUT_TEMPERATURE
     EnableDlgCtrl(IDC_CPU_TEMP_TIP_CHECK, false);
@@ -531,6 +555,20 @@ void CGeneralSettingsDlg::OnOK()
         MessageBox(CCommon::LoadText(IDS_LANGUAGE_CHANGE_INFO), NULL, MB_ICONINFORMATION | MB_OK);
     }
     m_show_all_interface_modified = (m_data.show_all_interface != theApp.m_general_data.show_all_interface);
+
+    //获取“默认网络适配器”的设置
+    int adapter_sel = m_default_adapter_combo.GetCurSel();
+    if (adapter_sel <= 0)
+    {
+        //选择了“自动（Windows默认）”
+        m_data.default_adapter.clear();
+    }
+    else
+    {
+        CString adapter_name;
+        m_default_adapter_combo.GetLBText(adapter_sel, adapter_name);
+        m_data.default_adapter = adapter_name.GetString();
+    }
 
     //获取数据文件保存位置的设置
     m_data.portable_mode = (((CButton*)GetDlgItem(IDC_SAVE_TO_PROGRAM_DIR_RADIO))->GetCheck() != 0);
@@ -784,6 +822,28 @@ void CGeneralSettingsDlg::OnCbnSelchangeSelectCpuCombo()
     CString cpu_core_name;
     m_select_cpu_combo.GetWindowText(cpu_core_name);
     m_data.cpu_core_name = cpu_core_name.GetString();
+}
+
+void CGeneralSettingsDlg::OnCbnSelchangeDefaultAdapterCombo()
+{
+    // TODO: 在此添加控件通知处理程序代码
+    int adapter_sel = m_default_adapter_combo.GetCurSel();
+    if (adapter_sel <= 0)
+    {
+        //选择了“自动（Windows默认）”
+        m_data.default_adapter.clear();
+    }
+    else
+    {
+        CString adapter_name;
+        m_default_adapter_combo.GetLBText(adapter_sel, adapter_name);
+        m_data.default_adapter = adapter_name.GetString();
+    }
+}
+
+bool CGeneralSettingsDlg::IsDefaultAdapterModified() const
+{
+    return m_data.default_adapter != theApp.m_general_data.default_adapter;
 }
 
 

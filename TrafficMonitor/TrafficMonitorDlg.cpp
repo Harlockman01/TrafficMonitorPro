@@ -375,6 +375,31 @@ void CTrafficMonitorDlg::AutoSelect()
     unsigned __int64 in_out_bytes;
     //m_connection_selected = m_connections[0].index;
     m_connection_selected = 0;
+
+    //如果设置了默认网络适配器，则优先选择该适配器
+    if (!theApp.m_general_data.default_adapter.empty())
+    {
+        std::wstring default_adapter = theApp.m_general_data.default_adapter;
+        bool adapter_found = false;
+        for (size_t i{}; i < m_connections.size(); i++)
+        {
+            std::wstring adapter_name = CCommon::StrToUnicode(m_connections[i].description_2.c_str());
+            if (adapter_name == default_adapter)
+            {
+                m_connection_selected = i;
+                adapter_found = true;
+                break;
+            }
+        }
+        if (adapter_found)
+        {
+            theApp.m_cfg_data.m_connection_name = GetConnection(m_connection_selected).description_2;
+            m_connection_change_flag = true;
+            return;
+        }
+        //如果没有找到默认适配器，则继续执行自动选择逻辑
+    }
+
     //自动选择连接时，查找已发送和已接收字节数之和最多的那个连接，并将其设置为当前查看的连接
     for (size_t i{}; i < m_connections.size(); i++)
     {
@@ -401,10 +426,10 @@ void CTrafficMonitorDlg::IniConnection()
     m_pIfTable = (MIB_IFTABLE*)malloc(m_dwSize);
     int rtn;
     rtn = GetIfTable(m_pIfTable, &m_dwSize, FALSE);
-    if (rtn == ERROR_INSUFFICIENT_BUFFER)	//如果函数返回值为ERROR_INSUFFICIENT_BUFFER，说明m_pIfTable的大小不够
+    if (rtn == ERROR_INSUFFICIENT_BUFFER)       //如果函数返回值为ERROR_INSUFFICIENT_BUFFER，说明m_pIfTable的大小不够
     {
         free(m_pIfTable);
-        m_pIfTable = (MIB_IFTABLE*)malloc(m_dwSize);	//用新的大小重新开辟一块内存
+        m_pIfTable = (MIB_IFTABLE*)malloc(m_dwSize);    //用新的大小重新开辟一块内存
     }
     GetIfTable(m_pIfTable, &m_dwSize, FALSE);
 
@@ -491,6 +516,9 @@ void CTrafficMonitorDlg::IniConnection()
 
     IniTaskBarConnectionMenu();     //初始化任务栏窗口中的“选择网络连接”子菜单项
 
+    //初始化“选择默认网络适配器”子菜单项
+    IniTaskBarDefaultAdapterMenu();
+
     m_restart_cnt++;    //记录初始化次数
     m_connection_change_flag = true;
 }
@@ -560,6 +588,68 @@ void CTrafficMonitorDlg::SetConnectionMenuState(CMenu* pMenu)
         pMenu->SetDefaultItem(m_connection_selected + 2, TRUE);
     else
         pMenu->SetDefaultItem(-1, TRUE);
+}
+
+void CTrafficMonitorDlg::IniDefaultAdapterMenu(CMenu* pMenu)
+{
+    ASSERT(pMenu != nullptr);
+    if (pMenu != nullptr)
+    {
+        //先将ID_SELECT_DEFAULT_ADAPTER_AUTO后面的所有菜单项删除
+        int start_pos = CCommon::GetMenuItemPosition(pMenu, ID_SELECT_DEFAULT_ADAPTER_AUTO) + 1;
+        while (pMenu->GetMenuItemCount() > start_pos)
+        {
+            pMenu->DeleteMenu(start_pos, MF_BYPOSITION);
+        }
+
+        //获取当前所有可用的网络连接
+        std::vector<NetWorkConection> adapters;
+        CAdapterCommon::GetAdapterInfo(adapters);
+        for (size_t i{}; i < adapters.size(); i++)
+        {
+            CString adapter_descr = CCommon::StrToUnicode(adapters[i].description_2.c_str()).c_str();
+            pMenu->AppendMenu(MF_STRING | MF_ENABLED, ID_SELECT_DEFAULT_ADAPTER_START + i, adapter_descr);
+        }
+    }
+}
+
+void CTrafficMonitorDlg::IniTaskBarDefaultAdapterMenu()
+{
+    //向“选择默认网络适配器”子菜单项添加项目
+    //主菜单和任务栏菜单的子菜单索引：GetSubMenu(0)是主弹出菜单，GetSubMenu(2)是“选择默认网络适配器”子菜单
+    IniDefaultAdapterMenu(theApp.m_main_menu.GetSubMenu(0)->GetSubMenu(1));
+    IniDefaultAdapterMenu(theApp.m_main_menu_plugin.GetSubMenu(0)->GetSubMenu(1));
+    IniDefaultAdapterMenu(theApp.m_taskbar_menu.GetSubMenu(0)->GetSubMenu(1));
+    IniDefaultAdapterMenu(theApp.m_taskbar_menu_plugin.GetSubMenu(0)->GetSubMenu(1));
+}
+
+void CTrafficMonitorDlg::SetDefaultAdapterMenuState(CMenu* pMenu)
+{
+    if (theApp.m_general_data.default_adapter.empty())
+    {
+        //选择了“自动（Windows默认）”
+        pMenu->CheckMenuRadioItem(0, 1, 0, MF_BYPOSITION | MF_CHECKED);
+    }
+    else
+    {
+        //查找当前默认适配器在菜单中的位置
+        int adapter_index = -1;
+        std::vector<NetWorkConection> adapters;
+        CAdapterCommon::GetAdapterInfo(adapters);
+        for (size_t i{}; i < adapters.size(); i++)
+        {
+            std::wstring adapter_name = CCommon::StrToUnicode(adapters[i].description_2.c_str());
+            if (adapter_name == theApp.m_general_data.default_adapter)
+            {
+                adapter_index = static_cast<int>(i);
+                break;
+            }
+        }
+        if (adapter_index >= 0)
+            pMenu->CheckMenuRadioItem(0, adapters.size() + 1, adapter_index + 1, MF_BYPOSITION | MF_CHECKED);
+        else
+            pMenu->CheckMenuRadioItem(0, 1, 0, MF_BYPOSITION | MF_CHECKED);
+    }
 }
 
 void CTrafficMonitorDlg::CloseTaskBarWnd()
@@ -830,6 +920,15 @@ void CTrafficMonitorDlg::ApplySettings(COptionsDlg& optionsDlg)
 
     if (optionsDlg.m_tab3_dlg.IsShowAllInterfaceModified() || is_connections_hide_changed)
         IniConnection();
+
+    //如果修改了“默认网络适配器”的设置，则重新初始化连接以应用新的默认适配器
+    if (optionsDlg.m_tab3_dlg.IsDefaultAdapterModified())
+    {
+        //切换到“自动选择”模式，让AutoSelect()根据新的默认适配器选择连接
+        theApp.m_cfg_data.m_auto_select = true;
+        theApp.m_cfg_data.m_select_all = false;
+        IniConnection();
+    }
 
     if (optionsDlg.m_tab3_dlg.IsMonitorTimeSpanModified())      //如果监控时间间隔改变了，则重设定时器
     {
@@ -1214,10 +1313,10 @@ void CTrafficMonitorDlg::DoMonitorAcquisition()
             m_dwSize = sizeof(MIB_IFTABLE);
             m_pIfTable = (MIB_IFTABLE*)malloc(m_dwSize);
             rtn = GetIfTable(m_pIfTable, &m_dwSize, FALSE);
-            if (rtn == ERROR_INSUFFICIENT_BUFFER)	//如果函数返回值为ERROR_INSUFFICIENT_BUFFER，说明m_pIfTable的大小不够
+            if (rtn == ERROR_INSUFFICIENT_BUFFER)       //如果函数返回值为ERROR_INSUFFICIENT_BUFFER，说明m_pIfTable的大小不够
             {
                 free(m_pIfTable);
-                m_pIfTable = (MIB_IFTABLE*)malloc(m_dwSize);	//用新的大小重新开辟一块内存
+                m_pIfTable = (MIB_IFTABLE*)malloc(m_dwSize);    //用新的大小重新开辟一块内存
             }
             GetIfTable(m_pIfTable, &m_dwSize, FALSE);
         }
@@ -2079,14 +2178,15 @@ void CTrafficMonitorDlg::OnRButtonUp(UINT nFlags, CPoint point)
     if (plugin != nullptr)
     {
         //将右键菜单中插件菜单的显示文本改为插件名
-        pContextMenu->ModifyMenu(17, MF_BYPOSITION, 17, plugin->GetInfo(ITMPlugin::TMI_NAME));
+        //注意：由于新增了“选择默认网络适配器”子菜单，插件菜单的位置从17变为18
+        pContextMenu->ModifyMenu(18, MF_BYPOSITION, 18, plugin->GetInfo(ITMPlugin::TMI_NAME));
         //获取插件图标
         HICON plugin_icon{};
         if (plugin->GetAPIVersion() >= 5)
             plugin_icon = (HICON)plugin->GetPluginIcon();
         //设置插件图标
         if (plugin_icon != nullptr)
-            CMenuIcon::AddIconToMenuItem(pContextMenu->GetSafeHmenu(), 17, TRUE, plugin_icon);
+            CMenuIcon::AddIconToMenuItem(pContextMenu->GetSafeHmenu(), 18, TRUE, plugin_icon);
     }
     //更新插件子菜单
     theApp.UpdatePluginMenu(&theApp.m_main_menu_plugin_sub_menu, plugin, 2);
@@ -2235,6 +2335,33 @@ BOOL CTrafficMonitorDlg::OnCommand(WPARAM wParam, LPARAM lParam)
         theApp.SaveConfig();
         m_connection_change_flag = true;
     }
+    //选择了“选择默认网络适配器”子菜单中项目时的处理
+    if (uMsg == ID_SELECT_DEFAULT_ADAPTER_AUTO)    //选择了“自动（Windows默认）”
+    {
+        theApp.m_general_data.default_adapter.clear();
+        //切换到“自动选择”模式，让AutoSelect()重新选择连接
+        theApp.m_cfg_data.m_auto_select = true;
+        theApp.m_cfg_data.m_select_all = false;
+        AutoSelect();
+        theApp.SaveConfig();
+        m_connection_change_flag = true;
+    }
+    if (uMsg >= ID_SELECT_DEFAULT_ADAPTER_START && uMsg <= ID_SELECT_DEFAULT_ADAPTER_MAX)   //选择了一个网络适配器作为默认
+    {
+        int adapter_index = uMsg - ID_SELECT_DEFAULT_ADAPTER_START;
+        std::vector<NetWorkConection> adapters;
+        CAdapterCommon::GetAdapterInfo(adapters);
+        if (adapter_index >= 0 && adapter_index < static_cast<int>(adapters.size()))
+        {
+            theApp.m_general_data.default_adapter = CCommon::StrToUnicode(adapters[adapter_index].description_2.c_str());
+            //切换到“自动选择”模式，让AutoSelect()使用新的默认适配器
+            theApp.m_cfg_data.m_auto_select = true;
+            theApp.m_cfg_data.m_select_all = false;
+            AutoSelect();
+            theApp.SaveConfig();
+            m_connection_change_flag = true;
+        }
+    }
 #ifdef DEBUG
     if (uMsg == ID_CMD_TEST)
     {
@@ -2280,6 +2407,12 @@ void CTrafficMonitorDlg::OnInitMenu(CMenu* pMenu)
     //设置“选择连接”子菜单项中各单选项的选择状态
     SetConnectionMenuState(theApp.m_main_menu.GetSubMenu(0)->GetSubMenu(0));
     SetConnectionMenuState(theApp.m_main_menu_plugin.GetSubMenu(0)->GetSubMenu(0));
+
+    //设置“选择默认网络适配器”子菜单项中各单选项的选择状态
+    SetDefaultAdapterMenuState(theApp.m_main_menu.GetSubMenu(0)->GetSubMenu(1));
+    SetDefaultAdapterMenuState(theApp.m_main_menu_plugin.GetSubMenu(0)->GetSubMenu(1));
+    SetDefaultAdapterMenuState(theApp.m_taskbar_menu.GetSubMenu(0)->GetSubMenu(1));
+    SetDefaultAdapterMenuState(theApp.m_taskbar_menu_plugin.GetSubMenu(0)->GetSubMenu(1));
 
     //设置“窗口不透明度”子菜单下各单选项的选择状态
     switch (theApp.m_cfg_data.m_transparency)
@@ -2773,6 +2906,9 @@ afx_msg LRESULT CTrafficMonitorDlg::OnTaskbarMenuPopedUp(WPARAM wParam, LPARAM l
     //设置“选择连接”子菜单项中各单选项的选择状态
     SetConnectionMenuState(theApp.m_taskbar_menu.GetSubMenu(0)->GetSubMenu(0));
     SetConnectionMenuState(theApp.m_taskbar_menu_plugin.GetSubMenu(0)->GetSubMenu(0));
+    //设置“选择默认网络适配器”子菜单项中各单选项的选择状态
+    SetDefaultAdapterMenuState(theApp.m_taskbar_menu.GetSubMenu(0)->GetSubMenu(1));
+    SetDefaultAdapterMenuState(theApp.m_taskbar_menu_plugin.GetSubMenu(0)->GetSubMenu(1));
     return 0;
 }
 

@@ -27,6 +27,7 @@ public:
     bool IsAutoRunModified() const { return m_auto_run_modified; }
     bool IsShowAllInterfaceModified() const { return m_show_all_interface_modified; }
     bool IsMonitorTimeSpanModified() const;
+    bool IsDefaultAdapterModified() const;     //是否修改了默认网络适配器的设置
     //bool IsTaskbarItemModified() const { return m_taskbar_item_modified; }
 
 protected:
@@ -50,6 +51,7 @@ protected:
     CSpinEdit m_mbd_temp_tip_edit;
     CComboBox2 m_hard_disk_combo;
     CComboBox2 m_select_cpu_combo;
+    CComboBox2 m_default_adapter_combo;     //下拉框：选择默认网络适配器
     CButton m_plugin_manager_btn;
     CButton m_select_connection_btn;
 
@@ -99,6 +101,7 @@ public:
     afx_msg void OnBnClickedHddCheck();
     afx_msg void OnBnClickedMbdCheck();
     afx_msg void OnCbnSelchangeSelectCpuCombo();
+    afx_msg void OnCbnSelchangeDefaultAdapterCombo();   //选择默认网络适配器时的处理
     afx_msg void OnBnClickedPluginManageButton();
     afx_msg void OnBnClickedShowNotifyIconCheck();
     afx_msg void OnBnClickedSelectConnectionsButton();
