@@ -2,6 +2,7 @@ name: Release CI
 on:
   push:
     tags: ['v*']
+    branches: ['master', 'main']
   workflow_dispatch:
 
 jobs:
@@ -14,9 +15,16 @@ jobs:
       
     - name: Add msbuild to PATH
       uses: microsoft/setup-msbuild@v2
-      
+
+    - name: Install MFC for x64
+      uses: microsoft/vs-setup-action@v1
+      with:
+        vs-version: '[17.8,18)'
+        components: Microsoft.VisualStudio.Component.VC.MFC.x86.x64;Microsoft.VisualStudio.Component.VC.ATL.x86.x64
+        vs-prerelease: false
+
     - name: Run msbuild
-      run: msbuild TrafficMonitor.sln -p:configuration="Release (Standard)" -p:platform=x64 -p:platformToolset=v143
+      run: msbuild TrafficMonitor_Lite.sln -p:configuration="Release (lite)" -p:platform=x64 -p:platformToolset=v143
       
     - name: Get current time
       uses: josStorer/get-current-time@v2.0.2
@@ -37,7 +45,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: x64_${{ steps.current-time.outputs.formattedTime }}_pdb
-        path: Bin/x64/Release (standard)/*.pdb
+        path: Bin/x64/Release (lite)/*.pdb
 
   x86_build:
     runs-on: windows-latest
@@ -47,7 +55,14 @@ jobs:
       
     - name: Add msbuild to PATH
       uses: microsoft/setup-msbuild@v2
-      
+
+    - name: Install MFC for x86
+      uses: microsoft/vs-setup-action@v1
+      with:
+        vs-version: '[17.8,18)'
+        components: Microsoft.VisualStudio.Component.VC.MFC.x86.x64;Microsoft.VisualStudio.Component.VC.ATL.x86.x64
+        vs-prerelease: false
+
     - name: Run msbuild
       run: msbuild TrafficMonitor_Lite.sln -p:configuration="Release (lite)" -p:platform=x86 -p:platformToolset=v143
       
@@ -63,47 +78,11 @@ jobs:
       with:
         name: x86_${{ steps.current-time.outputs.formattedTime }}_TrafficMonitor
         path: |
-          Bin/Release (standard)/TrafficMonitor.exe
-          Bin/Release (standard)/*.dll
+          Bin/Release (lite)/TrafficMonitor.exe
+          Bin/Release (lite)/*.dll
       
     - name : Upload pdb files
       uses: actions/upload-artifact@v4
       with:
         name: x86_${{ steps.current-time.outputs.formattedTime }}_pdb
         path: Bin/Release (lite)/*.pdb
-
-  arm64ec_build:
-    runs-on: windows-latest
-
-    steps:
-    - uses: actions/checkout@v3
-      
-    - name: Add msbuild to PATH
-      uses: microsoft/setup-msbuild@v2
-      
-    - name: Run msbuild
-      run: msbuild TrafficMonitor.sln -p:configuration="Release (standard)" -p:platform=ARM64EC -p:platformToolset=v143
-      
-    - name: Get current time
-      uses: josStorer/get-current-time@v2.0.2
-      id: current-time
-      with:
-        format: YYYYMMDD_HHmmss
-        utcOffset: "+08:00"
-
-    # - name: Move dll file path 
-    #   run: mv Bin/x64/Release/*.dll  Bin/ARM64EC/Release/
-
-    - name : Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: arm64EC_${{ steps.current-time.outputs.formattedTime }}_TrafficMonitor
-        path: |
-          Bin/ARM64EC/Release (standard)/TrafficMonitor.exe
-          Bin/ARM64EC/Release (standard)/*.dll
-
-    - name : Upload pdb files
-      uses: actions/upload-artifact@v4
-      with:
-        name: arm64EC_${{ steps.current-time.outputs.formattedTime }}_pdb
-        path: Bin/ARM64EC/Release (standard)/*.pdb
