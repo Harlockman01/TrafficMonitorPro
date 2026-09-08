@@ -16,12 +16,22 @@ jobs:
     - name: Add msbuild to PATH
       uses: microsoft/setup-msbuild@v2
 
-    - name: Install MFC for x64
-      uses: microsoft/vs-setup-action@v1
-      with:
-        vs-version: '[17.8,18)'
-        components: Microsoft.VisualStudio.Component.VC.MFC.x86.x64;Microsoft.VisualStudio.Component.VC.ATL.x86.x64
-        vs-prerelease: false
+    - name: Install MFC libraries
+      shell: pwsh
+      run: |
+        Write-Host "Installing MFC libraries..."
+        $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+        Write-Host "Visual Studio path: $vsPath"
+        $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+        if (Test-Path $installer) {
+            Write-Host "Running VS Installer to add MFC component..."
+            $proc = Start-Process -FilePath $installer -ArgumentList "modify","--installPath","`"$vsPath`"","--add","Microsoft.VisualStudio.Component.VC.MFC.x86.x64","--add","Microsoft.VisualStudio.Component.VC.ATL.x86.x64","--quiet","--norestart" -PassThru -Wait
+            Write-Host "Installer exit code: $($proc.ExitCode)"
+        } else {
+            Write-Host "VS Installer not found at $installer"
+            exit 1
+        }
+        Write-Host "MFC installation complete."
 
     - name: Run msbuild
       run: msbuild TrafficMonitor_Lite.sln -p:configuration="Release (lite)" -p:platform=x64 -p:platformToolset=v143
@@ -56,12 +66,22 @@ jobs:
     - name: Add msbuild to PATH
       uses: microsoft/setup-msbuild@v2
 
-    - name: Install MFC for x86
-      uses: microsoft/vs-setup-action@v1
-      with:
-        vs-version: '[17.8,18)'
-        components: Microsoft.VisualStudio.Component.VC.MFC.x86.x64;Microsoft.VisualStudio.Component.VC.ATL.x86.x64
-        vs-prerelease: false
+    - name: Install MFC libraries
+      shell: pwsh
+      run: |
+        Write-Host "Installing MFC libraries..."
+        $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+        Write-Host "Visual Studio path: $vsPath"
+        $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+        if (Test-Path $installer) {
+            Write-Host "Running VS Installer to add MFC component..."
+            $proc = Start-Process -FilePath $installer -ArgumentList "modify","--installPath","`"$vsPath`"","--add","Microsoft.VisualStudio.Component.VC.MFC.x86.x64","--add","Microsoft.VisualStudio.Component.VC.ATL.x86.x64","--quiet","--norestart" -PassThru -Wait
+            Write-Host "Installer exit code: $($proc.ExitCode)"
+        } else {
+            Write-Host "VS Installer not found at $installer"
+            exit 1
+        }
+        Write-Host "MFC installation complete."
 
     - name: Run msbuild
       run: msbuild TrafficMonitor_Lite.sln -p:configuration="Release (lite)" -p:platform=x86 -p:platformToolset=v143
