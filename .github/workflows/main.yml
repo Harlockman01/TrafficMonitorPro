@@ -8,7 +8,7 @@ on:
 jobs:
 
   x64_build:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
     - uses: actions/checkout@v3
@@ -19,19 +19,35 @@ jobs:
     - name: Install MFC libraries
       shell: pwsh
       run: |
-        Write-Host "Installing MFC libraries..."
+        Write-Host "Checking for MFC libraries..."
         $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
         Write-Host "Visual Studio path: $vsPath"
-        $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
-        if (Test-Path $installer) {
-            Write-Host "Running VS Installer to add MFC component..."
-            $proc = Start-Process -FilePath $installer -ArgumentList "modify","--installPath","`"$vsPath`"","--add","Microsoft.VisualStudio.Component.VC.MFC.x86.x64","--add","Microsoft.VisualStudio.Component.VC.ATL.x86.x64","--quiet","--norestart" -PassThru -Wait
-            Write-Host "Installer exit code: $($proc.ExitCode)"
-        } else {
-            Write-Host "VS Installer not found at $installer"
-            exit 1
+        # Check if MFC is already installed
+        $mfcPath = Join-Path $vsPath "VC\Tools\MSVC"
+        $mfcInstalled = $false
+        if (Test-Path $mfcPath) {
+            Get-ChildItem $mfcPath | ForEach-Object {
+                $atlmfcPath = Join-Path $_.FullName "atlmfc"
+                if (Test-Path $atlmfcPath) { $mfcInstalled = $true }
+            }
         }
-        Write-Host "MFC installation complete."
+        if ($mfcInstalled) {
+            Write-Host "MFC is already installed."
+        } else {
+            Write-Host "MFC not found. Installing..."
+            $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+            if (Test-Path $installer) {
+                Write-Host "Running VS Installer to add MFC component (with --wait)..."
+                & $installer modify --installPath "$vsPath" --add Microsoft.VisualStudio.Component.VC.MFC.x86.x64 --add Microsoft.VisualStudio.Component.VC.ATL.x86.x64 --quiet --norestart --wait --nocache
+                Write-Host "Installer exit code: $LASTEXITCODE"
+            } else {
+                Write-Host "VS Installer not found. Trying setup.exe..."
+                $setup = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+                & $setup modify --installPath "$vsPath" --add Microsoft.VisualStudio.Component.VC.MFC.x86.x64 --add Microsoft.VisualStudio.Component.VC.ATL.x86.x64 --quiet --norestart --wait
+                Write-Host "Setup exit code: $LASTEXITCODE"
+            }
+        }
+        Write-Host "MFC step complete."
 
     - name: Run msbuild
       run: msbuild TrafficMonitor_Lite.sln -p:configuration="Release (lite)" -p:platform=x64 -p:platformToolset=v143
@@ -58,7 +74,7 @@ jobs:
         path: Bin/x64/Release (lite)/*.pdb
 
   x86_build:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
     - uses: actions/checkout@v3
@@ -69,19 +85,34 @@ jobs:
     - name: Install MFC libraries
       shell: pwsh
       run: |
-        Write-Host "Installing MFC libraries..."
+        Write-Host "Checking for MFC libraries..."
         $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
         Write-Host "Visual Studio path: $vsPath"
-        $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
-        if (Test-Path $installer) {
-            Write-Host "Running VS Installer to add MFC component..."
-            $proc = Start-Process -FilePath $installer -ArgumentList "modify","--installPath","`"$vsPath`"","--add","Microsoft.VisualStudio.Component.VC.MFC.x86.x64","--add","Microsoft.VisualStudio.Component.VC.ATL.x86.x64","--quiet","--norestart" -PassThru -Wait
-            Write-Host "Installer exit code: $($proc.ExitCode)"
-        } else {
-            Write-Host "VS Installer not found at $installer"
-            exit 1
+        $mfcPath = Join-Path $vsPath "VC\Tools\MSVC"
+        $mfcInstalled = $false
+        if (Test-Path $mfcPath) {
+            Get-ChildItem $mfcPath | ForEach-Object {
+                $atlmfcPath = Join-Path $_.FullName "atlmfc"
+                if (Test-Path $atlmfcPath) { $mfcInstalled = $true }
+            }
         }
-        Write-Host "MFC installation complete."
+        if ($mfcInstalled) {
+            Write-Host "MFC is already installed."
+        } else {
+            Write-Host "MFC not found. Installing..."
+            $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+            if (Test-Path $installer) {
+                Write-Host "Running VS Installer to add MFC component (with --wait)..."
+                & $installer modify --installPath "$vsPath" --add Microsoft.VisualStudio.Component.VC.MFC.x86.x64 --add Microsoft.VisualStudio.Component.VC.ATL.x86.x64 --quiet --norestart --wait --nocache
+                Write-Host "Installer exit code: $LASTEXITCODE"
+            } else {
+                Write-Host "VS Installer not found. Trying setup.exe..."
+                $setup = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+                & $setup modify --installPath "$vsPath" --add Microsoft.VisualStudio.Component.VC.MFC.x86.x64 --add Microsoft.VisualStudio.Component.VC.ATL.x86.x64 --quiet --norestart --wait
+                Write-Host "Setup exit code: $LASTEXITCODE"
+            }
+        }
+        Write-Host "MFC step complete."
 
     - name: Run msbuild
       run: msbuild TrafficMonitor_Lite.sln -p:configuration="Release (lite)" -p:platform=x86 -p:platformToolset=v143
