@@ -22,7 +22,6 @@ jobs:
         Write-Host "Checking for MFC libraries..."
         $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
         Write-Host "Visual Studio path: $vsPath"
-        # Check if MFC is already installed
         $mfcPath = Join-Path $vsPath "VC\Tools\MSVC"
         $mfcInstalled = $false
         if (Test-Path $mfcPath) {
@@ -40,38 +39,57 @@ jobs:
                 Write-Host "Running VS Installer to add MFC component (with --wait)..."
                 & $installer modify --installPath "$vsPath" --add Microsoft.VisualStudio.Component.VC.MFC.x86.x64 --add Microsoft.VisualStudio.Component.VC.ATL.x86.x64 --quiet --norestart --wait --nocache
                 Write-Host "Installer exit code: $LASTEXITCODE"
-            } else {
-                Write-Host "VS Installer not found. Trying setup.exe..."
-                $setup = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
-                & $setup modify --installPath "$vsPath" --add Microsoft.VisualStudio.Component.VC.MFC.x86.x64 --add Microsoft.VisualStudio.Component.VC.ATL.x86.x64 --quiet --norestart --wait
-                Write-Host "Setup exit code: $LASTEXITCODE"
             }
         }
         Write-Host "MFC step complete."
 
     - name: Run msbuild
       run: msbuild TrafficMonitor_Lite.sln -p:configuration="Release (lite)" -p:platform=x64 -p:platformToolset=v143
-      
+
+    - name: Copy runtime resources to output
+      shell: pwsh
+      run: |
+        $outDir = "Bin\x64\Release (lite)"
+        # Copiar carpeta de skins
+        if (Test-Path "TrafficMonitor\skins") {
+          Copy-Item -Path "TrafficMonitor\skins" -Destination $outDir -Recurse -Force
+        }
+        # Copiar carpeta de idiomas
+        if (Test-Path "TrafficMonitor\language") {
+          Copy-Item -Path "TrafficMonitor\language" -Destination $outDir -Recurse -Force
+        }
+        # Copiar DLLs de OpenHardwareMonitor si existen
+        if (Test-Path "OpenHardwareMonitorApi\LibreHardwareMonitorLib.dll") {
+          Copy-Item -Path "OpenHardwareMonitorApi\LibreHardwareMonitorLib.dll" -Destination $outDir -Force
+        }
+        Write-Host "Runtime resources copied to $outDir"
+
     - name: Get current time
       uses: josStorer/get-current-time@v2.0.2
       id: current-time
       with:
         format: YYYYMMDD_HHmmss
         utcOffset: "+08:00"
-      
-    - name : Upload artifact
+
+    - name: Create portable zip
+      shell: pwsh
+      run: |
+        $outDir = "Bin\x64\Release (lite)"
+        $zipName = "TrafficMonitor_x64_${{ steps.current-time.outputs.formattedTime }}.zip"
+        Compress-Archive -Path "$outDir\*" -DestinationPath $zipName -Force
+        Write-Host "Created $zipName"
+
+    - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: x64_${{ steps.current-time.outputs.formattedTime }}_TrafficMonitor
-        path: |
-          Bin/x64/Release (lite)/TrafficMonitor.exe
-          Bin/x64/Release (lite)/*.dll
+        path: Bin/x64/Release (lite)/*
 
-    - name : Upload pdb files
+    - name: Upload portable zip
       uses: actions/upload-artifact@v4
       with:
-        name: x64_${{ steps.current-time.outputs.formattedTime }}_pdb
-        path: Bin/x64/Release (lite)/*.pdb
+        name: x64_${{ steps.current-time.outputs.formattedTime }}_TrafficMonitor_zip
+        path: TrafficMonitor_x64_${{ steps.current-time.outputs.formattedTime }}.zip
 
   x86_build:
     runs-on: windows-2022
@@ -105,35 +123,51 @@ jobs:
                 Write-Host "Running VS Installer to add MFC component (with --wait)..."
                 & $installer modify --installPath "$vsPath" --add Microsoft.VisualStudio.Component.VC.MFC.x86.x64 --add Microsoft.VisualStudio.Component.VC.ATL.x86.x64 --quiet --norestart --wait --nocache
                 Write-Host "Installer exit code: $LASTEXITCODE"
-            } else {
-                Write-Host "VS Installer not found. Trying setup.exe..."
-                $setup = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
-                & $setup modify --installPath "$vsPath" --add Microsoft.VisualStudio.Component.VC.MFC.x86.x64 --add Microsoft.VisualStudio.Component.VC.ATL.x86.x64 --quiet --norestart --wait
-                Write-Host "Setup exit code: $LASTEXITCODE"
             }
         }
         Write-Host "MFC step complete."
 
     - name: Run msbuild
       run: msbuild TrafficMonitor_Lite.sln -p:configuration="Release (lite)" -p:platform=x86 -p:platformToolset=v143
-      
+
+    - name: Copy runtime resources to output
+      shell: pwsh
+      run: |
+        $outDir = "Bin\Release (lite)"
+        if (Test-Path "TrafficMonitor\skins") {
+          Copy-Item -Path "TrafficMonitor\skins" -Destination $outDir -Recurse -Force
+        }
+        if (Test-Path "TrafficMonitor\language") {
+          Copy-Item -Path "TrafficMonitor\language" -Destination $outDir -Recurse -Force
+        }
+        if (Test-Path "OpenHardwareMonitorApi\LibreHardwareMonitorLib.dll") {
+          Copy-Item -Path "OpenHardwareMonitorApi\LibreHardwareMonitorLib.dll" -Destination $outDir -Force
+        }
+        Write-Host "Runtime resources copied to $outDir"
+
     - name: Get current time
       uses: josStorer/get-current-time@v2.0.2
       id: current-time
       with:
         format: YYYYMMDD_HHmmss
         utcOffset: "+08:00"
-      
-    - name : Upload artifact
+
+    - name: Create portable zip
+      shell: pwsh
+      run: |
+        $outDir = "Bin\Release (lite)"
+        $zipName = "TrafficMonitor_x86_${{ steps.current-time.outputs.formattedTime }}.zip"
+        Compress-Archive -Path "$outDir\*" -DestinationPath $zipName -Force
+        Write-Host "Created $zipName"
+
+    - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: x86_${{ steps.current-time.outputs.formattedTime }}_TrafficMonitor
-        path: |
-          Bin/Release (lite)/TrafficMonitor.exe
-          Bin/Release (lite)/*.dll
-      
-    - name : Upload pdb files
+        path: Bin/Release (lite)/*
+
+    - name: Upload portable zip
       uses: actions/upload-artifact@v4
       with:
-        name: x86_${{ steps.current-time.outputs.formattedTime }}_pdb
-        path: Bin/Release (lite)/*.pdb
+        name: x86_${{ steps.current-time.outputs.formattedTime }}_TrafficMonitor_zip
+        path: TrafficMonitor_x86_${{ steps.current-time.outputs.formattedTime }}.zip
